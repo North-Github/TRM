@@ -43,7 +43,7 @@ To get started with this package, follow these steps:
 
 1.  **Clone the repository:**
     ```bash
-    git clone [https://github.com/North-Github/TRM.git](https://github.com/North-Github/TRM.git)
+    git clone https://github.com/North-Github/TRM.git
     cd TRM
     ```
 
