@@ -1,8 +1,17 @@
 import os
 import cv2
 import numpy as np # Often useful with image processing, so good to include
-# Assuming TRM is a module you've defined elsewhere
-import TRM_modules.TRM as TRM 
+
+# Assuming TRM is located at TRM_modules/TRM.py
+# This import path correctly reflects the module structure you're aiming for.
+try:
+    import TRM_modules.TRM as TRM
+except ImportError:
+    print("Error: TRM_modules.TRM could not be imported.")
+    print("Please ensure TRM_modules directory is correctly set up in your Python path.")
+    exit() # Exit if the core module is not found
+
+import TRM_modules.utils.visualization_helpers as TRM_viz
 
 def process_image_with_trm(input_image_path: str, output_dir: str = 'output'):
     """
@@ -19,44 +28,78 @@ def process_image_with_trm(input_image_path: str, output_dir: str = 'output'):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    filename = os.path.basename(input_image_path)
+    filename_base = os.path.basename(input_image_path)
+    filename_stem, ext = os.path.splitext(filename_base)
     
     img = cv2.imread(input_image_path, cv2.IMREAD_GRAYSCALE)
 
     if img is None:
         print(f"Error: Could not read image from {input_image_path}")
         return
-
-    # Call the TRM function. Using descriptive variable names.
-    # Original commented lines are kept for reference if you want to switch methods
-    # res_single_point = TRM.TRM_single_point(img, [50, 50]) # Example usage
-    # res_weighted = TRM.TRM_weighted(img) # Example usage
     
-    intersection_points, link_counts = TRM.TRM_link_remainder(img)
+    # --- EXAMPLE 1: Using TRM_fast_link_remainder ---
+    print("Running Example 1: TRM_fast_link_remainder")
+    try:
+        fast_intersection_points, fast_link_counts = TRM.TRM_fast_link_remainder(img)
+        
+        # Visualize the result from TRM_fast_link_remainder
+        # Note: TRM_fast_link_remainder only provides link_counts, so only one type of viz is applicable
+        output_path_fast_remainder = os.path.join(
+            output_dir, f"{filename_stem}_(EX_1_TRM_fast_remainder){ext}"
+        )
+        TRM_viz.visualize_trm_link_remainder(
+            img, 
+            fast_intersection_points, 
+            fast_link_counts, 
+            output_path_fast_remainder
+        )
+    except Exception as e:
+        print(f"Error calling TRM.TRM_fast_link_remainder: {e}")
 
-    # Convert grayscale image to BGR for colored circles
-    display_img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+     # --- EXAMPLE 2: Using TRM_weighted ---
+    print("\nRunning Example 2: TRM_weighted")
+    try:
+        weighted_intersection_points, weighted_link_counts, weighted_mem_THI = TRM.TRM_weighted(img)
+        
+        # Visualize link remainder for TRM_weighted (using its link_counts)
+        output_path_weighted_remainder = os.path.join(
+            output_dir, f"{filename_stem}_(EX_2.1_TRM_weighted_remainder){ext}"
+        )
+        TRM_viz.visualize_trm_link_remainder(
+            img, 
+            weighted_intersection_points, 
+            weighted_link_counts, 
+            output_path_weighted_remainder
+        )
 
-    # Draw circles at intersection points, with color intensity based on link_counts
-    for i, point in enumerate(intersection_points):
-        # Ensure color value is within 0-255. 
-        # Max link_count needs to be considered for appropriate scaling.
-        # Assuming link_counts are relatively small or you want a strong visual difference.
-        # A simple linear scaling up to 255 might be:
-        # color_intensity = min(255, int(link_counts[i] * some_scaling_factor))
-        # For the original 'int(31*link_counts[i])' logic, this implies link_counts max around 8
-        color_intensity = min(255, int(31 * link_counts[i])) 
-        cv2.circle(display_img, point, radius=3, color=(0, 0, color_intensity), thickness=-1) # thickness=-1 fills the circle
+        # Visualize link directions for TRM_weighted (using its mem_THI)
+        output_path_weighted_directions = os.path.join(
+            output_dir, f"{filename_stem}_(EX_2.2_TRM_weighted_directions){ext}"
+        )
+        TRM_viz.visualize_trm_link_directions(
+            img, 
+            weighted_intersection_points, 
+            weighted_link_counts, # Still needed for color scaling
+            weighted_mem_THI, 
+            output_path_weighted_directions
+        )
 
-    output_image_path = os.path.join(output_dir, 'TRM_' + filename)
-    cv2.imwrite(output_image_path, display_img)
-    print(f"Processed image saved to: {output_image_path}")
+    except Exception as e:
+        print(f"Error calling TRM.TRM_weighted: {e}")
+
 
 # Example usage:
 if __name__ == "__main__":
-    INPUT_IMAGE_PATH = os.path.join('data', 'sample_1.jpg')
-    process_image_with_trm(INPUT_IMAGE_PATH)
+    data_dir = 'data' 
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir)
+        print(f"Created data directory: {data_dir}. Please place sample_1.jpg here.")
 
-    # You can also add more examples or a loop for multiple images
-    # INPUT_IMAGE_PATH_2 = os.path.join('data', 'another_sample.png')
-    # process_image_with_trm(INPUT_IMAGE_PATH_2)
+    INPUT_IMAGE_PATH = os.path.join(data_dir, 'sample_1.jpg')
+    
+    if not os.path.exists(INPUT_IMAGE_PATH):
+        print(f"Error: Input image not found at {INPUT_IMAGE_PATH}")
+        print("Please ensure 'sample_1.jpg' is placed in the 'data' directory.")
+    else:
+        process_image_with_trm(INPUT_IMAGE_PATH)
+    

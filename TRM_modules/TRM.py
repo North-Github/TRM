@@ -110,7 +110,7 @@ def TRM_weighted(
     ]
 
     mem_THI = []
-
+    mem_link_counts = []
     for point in intersection_points:
         near_points = fn.find_8_neighbors(point, step_size=step_size, max_size=h)
         mem_link_state = np.ones(8)
@@ -121,35 +121,73 @@ def TRM_weighted(
                 mem_link_state[idx] = 0
 
         THI = np.sum(mem_link_state * weights_flat)
+        link_counts = np.sum(mem_link_state)
 
         if scale:
             THI /= (mean + 1e-8)  # Safe scale to avoid division by zero
 
         mem_THI.append(THI)
+        mem_link_counts.append(link_counts)
 
     mem_THI = np.array(mem_THI, dtype=np.complex128)
     if return_points:
-        return intersection_points, mem_THI
+        return intersection_points, mem_link_counts, mem_THI
 
-    return mem_THI
+    return mem_link_counts,mem_THI
 
-def TRM_link_remainder(
+def TRM_fast_link_remainder(
     img: np.ndarray,
     step_size: int = 15,
     scale: bool = False,
     return_points: bool = True
 ) -> tuple[list[list[int]], list[int]]:
     """
-    Computes the link remainder for each grid point using the Turbulent Region Model.
+    Computes a simplified link remainder metric for image regions on a grid.
 
-    Parameters:
-        img (np.ndarray): 2D grayscale image.
-        step_size (int): Grid spacing for sampling points.
-        scale (bool): Unused flag, placeholder for future scaling.
-        return_points (bool): If True, return points with their link remainder counts.
+    This function provides a faster approximation of the Turbulent Region Model (TRM)
+    link remainder by avoiding the computation of explicit directional information.
+    It samples the image on a grid and calculates a local "link remainder" value
+    for each grid point, indicating the presence of complex topological structures.
 
-    Returns:
-        tuple: (intersection_points, link_counts)
+    Parameters
+    ----------
+    img : np.ndarray
+        A 2D grayscale image (e.g., loaded with `cv2.IMREAD_GRAYSCALE`).
+        Expected pixel values typically range from 0 to 255.
+    step_size : int, optional
+        The spacing between sampled grid points in pixels. A smaller `step_size`
+        results in more points and a finer-grained analysis, but increases
+        computation time. Defaults to 15.
+    scale : bool, optional
+        **Currently unused.** This parameter is a placeholder for future
+        functionality, potentially for scaling the computed link remainder values.
+        Defaults to False.
+    return_points : bool, optional
+        If True, the function returns a tuple containing both the grid points
+        (intersection points) and their corresponding link remainder counts.
+        If False, the exact return type might differ based on internal logic
+        (e.g., returning only the raw computed map, though the current
+        return signature implies True). Defaults to True.
+
+    Returns
+    -------
+    tuple[list[list[int]], list[int]]
+        A tuple containing:
+        - `intersection_points` (list[list[int]]): A list of `[x, y]` coordinates
+          (as lists or tuples) representing the grid points where the link remainder
+          was computed. These points are typically the center of the local region.
+        - `link_counts` (list[int]): A list of integer values, where each value
+          corresponds to the calculated link remainder for the respective
+          `intersection_point`. Higher values generally indicate more complex
+          local topological structures.
+
+    Notes
+    -----
+    This function focuses on efficiency by simplifying the link remainder
+    calculation, which might be suitable for large images or applications
+    where precise directional analysis is not strictly required.
+    For a more comprehensive TRM analysis that includes directional vectors,
+    consider using `TRM_weighted` or similar functions.
     """
     h, w = img.shape
 
