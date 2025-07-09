@@ -15,5 +15,5 @@ ENV/
 .idea/
 
 # Image in output/
-output/
+output/*
 

@@ -2,7 +2,7 @@ import os
 import cv2
 import numpy as np # Often useful with image processing, so good to include
 # Assuming TRM is a module you've defined elsewhere
-import TRM 
+import TRM_modules.TRM as TRM 
 
 def process_image_with_trm(input_image_path: str, output_dir: str = 'output'):
     """

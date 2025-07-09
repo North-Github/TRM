@@ -1,5 +1,5 @@
 import numpy as np
-import functions as fn
+import TRM_modules.utils.helper_functions as fn
 
 def TRM_single_point(
     img: np.ndarray,
