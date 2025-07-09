@@ -1,7 +1,19 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+
+# Virtual environments
 venv/
 .venv/
 ENV/
-env/
-__pycache__/
-*.py[cod]
-*.pyo
+
+# OS files
+.DS_Store
+
+# Editor settings (optional)
+.vscode/
+.idea/
+
+# Image in output/
+output/
+

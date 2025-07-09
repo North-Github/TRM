@@ -63,89 +63,146 @@ def TRM_single_point(
     return THI
 
 
-def TRM_weigthed(img, weights=np.array([[-1-1j, 0-1j, 1-1j],[-1, 0, 1],[-1+1j,0+1j,1+1j]]), step_size = 15, scale=False, return_points = False):
-    weights = weights.reshape(1, -1)[0]
-    weights = np.delete(weights, 4)
+def TRM_weighted(
+    img: np.ndarray,
+    step_size: int = 15,
+    weights: np.ndarray = np.array([
+        [-1-1j, 0-1j, 1-1j],
+        [-1,    0,    1],
+        [-1+1j, 0+1j, 1+1j]
+    ]),
+    scale: bool = False,
+    return_points: bool = True
+) -> tuple[list[list[int]], list[complex]]:
+    """
+    Computes THI values over a grid of points using the Turbulent Region Model.
+
+    Parameters:
+        img (np.ndarray): 2D grayscale image.
+        weights (np.ndarray): 3x3 complex weights matrix.
+        step_size (int): Grid spacing for sampling points.
+        scale (bool): Option to scale THI by gradient stats (currently unused).
+        return_points (bool): If True, return grid points with THI values.
+
+    Returns:
+        tuple: (intersection_points, mem_THI)
+    """
+    # Flatten weights and remove center
+    weights_flat = weights.flatten()
+    weights_flat = np.delete(weights_flat, 4)
+
     h, w = img.shape
-    # step_size = 15
+
+    # Compute gradient magnitude
     dx, dy = np.gradient(img)
-    magnitude = np.sqrt(dx**2 + dy**2)
-    mean = np.average(magnitude)
+    magnitude = np.hypot(dx, dy)
+
+    # Compute threshold
+    mean = np.mean(magnitude)
     std = np.std(magnitude)
     thresh = mean + 2 * std
 
-    intersection_points = []
-    mem_links = []
-    for i in range(0, h, step_size):
-        for j in range(0, w, step_size):
-            point = [i, j]
-            intersection_points.append(point)
+    # Generate grid points
+    intersection_points = [
+        [i, j]
+        for i in range(0, h, step_size)
+        for j in range(0, w, step_size)
+    ]
+
     mem_THI = []
+
     for point in intersection_points:
         near_points = fn.find_8_neighbors(point, step_size=step_size, max_size=h)
         mem_link_state = np.ones(8)
-        for i, near_point in enumerate(near_points):
-            # print(point, near_point)
+
+        for idx, near_point in enumerate(near_points):
             max_value = fn.max_intensity_along_line(magnitude, point, near_point)
-            if max_value>=thresh:
-                mem_link_state[i] = 0
+            if max_value >= thresh:
+                mem_link_state[idx] = 0
 
-        THI = np.sum(mem_link_state * weights)
+        THI = np.sum(mem_link_state * weights_flat)
+
+        if scale:
+            THI /= (mean + 1e-8)  # Safe scale to avoid division by zero
+
         mem_THI.append(THI)
-        # print(mem_link_state, mem_link_state * weights, 'THI', THI)
-        # quit()
-    return intersection_points, mem_THI
 
-def TRM(img, step_size = 15, scale=False, return_points = False):
+    mem_THI = np.array(mem_THI, dtype=np.complex128)
+    if return_points:
+        return intersection_points, mem_THI
+
+    return mem_THI
+
+def TRM_link_remainder(
+    img: np.ndarray,
+    step_size: int = 15,
+    scale: bool = False,
+    return_points: bool = True
+) -> tuple[list[list[int]], list[int]]:
+    """
+    Computes the link remainder for each grid point using the Turbulent Region Model.
+
+    Parameters:
+        img (np.ndarray): 2D grayscale image.
+        step_size (int): Grid spacing for sampling points.
+        scale (bool): Unused flag, placeholder for future scaling.
+        return_points (bool): If True, return points with their link remainder counts.
+
+    Returns:
+        tuple: (intersection_points, link_counts)
+    """
     h, w = img.shape
-    # step_size = 15
+
+    # Compute gradient magnitude
     dx, dy = np.gradient(img)
-    magnitude = np.sqrt(dx**2 + dy**2)
-    mean = np.average(magnitude)
+    magnitude = np.hypot(dx, dy)
+
+    mean = np.mean(magnitude)
     std = np.std(magnitude)
     thresh = mean + 2 * std
 
-    intersection_points = []
+    # Generate grid points
+    intersection_points = [
+        [i, j]
+        for i in range(0, h, step_size)
+        for j in range(0, w, step_size)
+    ]
+
     mem_links = []
-    for i in range(0, h, step_size):
-        for j in range(0, w, step_size):
-            point = [i, j]
-            intersection_points.append(point)
-            near_points = fn.find_8_neighbors(point, step_size=step_size, max_size=h)
-            # print(point, near_points)
-            for idx in [4, 5, 6, 7]:  # Bottom and diagonal neighbors
-                neighbor = near_points[idx]
-                mem_links.append([point, neighbor])
+
+    for point in intersection_points:
+        near_points = fn.find_8_neighbors(point, step_size=step_size, max_size=h)
+        # Only use bottom & diagonal neighbors (idx 4, 5, 6, 7)
+        for idx in [4, 5, 6, 7]:
+            neighbor = near_points[idx]
+            mem_links.append([point, neighbor])
+
     mem_links = np.array(mem_links)
-    mem_link_state = np.ones((mem_links.shape[0]))
-    # print(mem_links, mem_links.shape, mem_link_state.shape)
-    for i, points in enumerate(mem_links):
-        p1 = points[0]
-        p2 = points[1]
+
+    # Initialize link states
+    mem_link_state = np.ones(mem_links.shape[0])
+
+    for i, (p1, p2) in enumerate(mem_links):
         max_value = fn.max_intensity_along_line(magnitude, p1, p2)
-        if max_value>=thresh:
+        if max_value >= thresh:
             mem_link_state[i] = 0
-    filter_links = mem_links[mem_link_state==0].reshape(-1, 2)
+
+    # Get remaining (filtered) links
+    filter_links = mem_links[mem_link_state == 0].reshape(-1, 2)
     filter_points = filter_links.reshape(-1, 2)
 
-    # Get unique points and their counts
+    # Find unique points and their link counts
     unique_points, counts = np.unique(filter_points, axis=0, return_counts=True)
-    delta_t = t2 - t1
+
+    # Count links for each grid point
+    mem_link_counts = []
+    for point in intersection_points:
+        matches = np.all(unique_points == point, axis=1)
+        link_count = counts[matches][0] if np.any(matches) else 0
+        mem_link_counts.append(link_count)
+    mem_link_counts = np.array(mem_link_counts)
     if return_points:
-        mem_link_counts = []
-        for points in intersection_points:
-            target_point = np.array(points)
-            # Find matching rows
-            matches = np.all(unique_points == target_point, axis=1)
-            # Get indices
-            indices = np.where(matches)[0]
-            link_count = 0
-            if len(indices) != 0:
-                link_count = counts[indices[0]]
-                
-            print(points, link_count)
+        return intersection_points, mem_link_counts
 
-            mem_link_counts.append(link_count)
-
-        return intersection_points, mem_link_counts, delta_t
+    return mem_link_counts
  
